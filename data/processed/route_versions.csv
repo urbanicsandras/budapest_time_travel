@@ -1,1 +1,1 @@
-version_id,route_id,valid_from,valid_to,route_desc,route_long_name,route_short_name,parent_route_id
+version_id,route_id,direction_id,route_long_name,route_desc,valid_from,valid_to,shape_id,trip_headsign,parent_version_id,note
