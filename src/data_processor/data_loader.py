@@ -3,6 +3,7 @@ Data loading functions for GTFS and processed transit data.
 """
 import pandas as pd
 import numpy as np
+import warnings
 from typing import Tuple, Optional
 
 from .config import PathManager, Config
@@ -22,7 +23,20 @@ def load_gtfs_data(date: str, print_shapes: bool = False) -> Tuple[pd.DataFrame,
     routes_path, trips_path, shapes_path, calendar_path, calendar_dates_path = PathManager.get_gtfs_data_paths(date)
     
     routes_df = pd.read_csv(routes_path)
-    trips_df = pd.read_csv(trips_path)
+    
+    # Read trips with mixed type handling - suppress warnings for cleaner output
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pd.errors.DtypeWarning)
+        trips_df = pd.read_csv(trips_path, dtype={
+            'service_id': 'str',
+            'trip_id': 'str', 
+            'route_id': 'str',
+            'shape_id': 'str',
+            'trip_headsign': 'str',
+            'direction_id': 'Int64',  # nullable integer
+            'block_id': 'str'
+        }, low_memory=False)
+    
     shapes_df = pd.read_csv(shapes_path)
     calendar_dates_df = pd.read_csv(calendar_dates_path)
 

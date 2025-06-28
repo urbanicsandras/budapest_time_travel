@@ -65,13 +65,14 @@ def build_service_data_with_exceptions(calendar_dates_df: pd.DataFrame,
     return df_exceptions
 
 
-def merge_service_data(df_noexceptions: pd.DataFrame, df_exceptions: pd.DataFrame) -> pd.DataFrame:
+def merge_service_data(df_noexceptions: pd.DataFrame, df_exceptions: pd.DataFrame, show_progress: bool = True) -> pd.DataFrame:
     """
     Merge service data with and without exceptions, handling duplicates.
     
     Args:
         df_noexceptions: DataFrame with service data without exceptions
         df_exceptions: DataFrame with service data with exceptions
+        show_progress: Whether to show progress messages
         
     Returns:
         Merged DataFrame with duplicates removed
@@ -111,12 +112,13 @@ def merge_service_data(df_noexceptions: pd.DataFrame, df_exceptions: pd.DataFram
     # Reset index
     merged_df = merged_df.reset_index(drop=True)
 
-    print(f"Removed {removed} duplicate rows where only exception_type differed (NaN vs non-NaN).")
+    if show_progress:
+        print(f"Removed {removed} duplicate rows where only exception_type differed (NaN vs non-NaN).")
     return merged_df
 
 
 def build_shape_variant_data(route_versions_df: pd.DataFrame, df_noexceptions: pd.DataFrame, 
-                           df_exceptions: pd.DataFrame) -> pd.DataFrame:
+                           df_exceptions: pd.DataFrame, show_progress: bool = True) -> pd.DataFrame:
     """
     Build shape variant data by merging route versions with service data.
     
@@ -124,23 +126,24 @@ def build_shape_variant_data(route_versions_df: pd.DataFrame, df_noexceptions: p
         route_versions_df: DataFrame with route versions
         df_noexceptions: DataFrame with service data without exceptions
         df_exceptions: DataFrame with service data with exceptions
+        show_progress: Whether to show progress messages
         
     Returns:
         DataFrame with shape variant data
     """
     valid_routes = route_versions_df[route_versions_df["valid_to"].isna()][["version_id", "route_id", "direction_id", "main_shape_id"]]
 
-    merged_df = merge_service_data(df_noexceptions, df_exceptions)
+    merged_df = merge_service_data(df_noexceptions, df_exceptions, show_progress)
     return_df = pd.merge(valid_routes, merged_df, on=["route_id", "direction_id"])
     return_df["main_shape_id"] = (return_df["main_shape_id"] == return_df["shape_id"]).astype(int)
     return_df = return_df.rename(columns={"main_shape_id": "is_main"})
-    print("return_df: ", return_df.columns)
     return return_df
 
 
 def update_shape_variants_and_activations(shape_variant_data: pd.DataFrame, 
                                          shape_variants_df: pd.DataFrame,
-                                         shape_variant_activations_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                         shape_variant_activations_df: pd.DataFrame,
+                                         show_progress: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Update shape variants and activations DataFrames with new data.
     
@@ -148,6 +151,7 @@ def update_shape_variants_and_activations(shape_variant_data: pd.DataFrame,
         shape_variant_data: DataFrame with new shape variant data
         shape_variants_df: Existing shape variants DataFrame
         shape_variant_activations_df: Existing shape variant activations DataFrame
+        show_progress: Whether to show progress messages
         
     Returns:
         Tuple of updated (shape_variants_df, shape_variant_activations_df)
@@ -221,26 +225,27 @@ def update_shape_variants_and_activations(shape_variant_data: pd.DataFrame,
     shape_variant_activations_df.reset_index(drop=True, inplace=True)
 
     # Display results
-    print("Updated shape_variants_df:")
-    print(f"Shape: {shape_variants_df.shape}")
-    print()
+    if show_progress:
+        print("Updated shape_variants_df:")
+        print(f"Shape: {shape_variants_df.shape}")
+        print()
 
-    print("Updated shape_variant_activations_df:")
-    print(f"Shape: {shape_variant_activations_df.shape}")
+        print("Updated shape_variant_activations_df:")
+        print(f"Shape: {shape_variant_activations_df.shape}")
 
-    # Summary
-    print(f"\nSummary:")
-    print(f"Total unique shape variants: {len(shape_variants_df)}")
-    print(f"Total shape variant activations: {len(shape_variant_activations_df)}")
-    if not truly_new_variants.empty:
-        print(f"New variants added: {len(truly_new_variants)}")
-        if 'new_variant_records' in locals():
-            print(f"Shape variant IDs added: {new_variant_records['shape_variant_id'].min()} - {new_variant_records['shape_variant_id'].max()}")
-    else:
-        print("No new variants added")
-    if not truly_new_activations.empty:
-        print(f"New activations added: {len(truly_new_activations)}")
-    else:
-        print("No new activations added")
+        # Summary
+        print(f"\nSummary:")
+        print(f"Total unique shape variants: {len(shape_variants_df)}")
+        print(f"Total shape variant activations: {len(shape_variant_activations_df)}")
+        if not truly_new_variants.empty:
+            print(f"New variants added: {len(truly_new_variants)}")
+            if 'new_variant_records' in locals():
+                print(f"Shape variant IDs added: {new_variant_records['shape_variant_id'].min()} - {new_variant_records['shape_variant_id'].max()}")
+        else:
+            print("No new variants added")
+        if not truly_new_activations.empty:
+            print(f"New activations added: {len(truly_new_activations)}")
+        else:
+            print("No new activations added")
 
     return shape_variants_df, shape_variant_activations_df

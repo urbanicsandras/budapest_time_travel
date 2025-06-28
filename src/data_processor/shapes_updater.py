@@ -6,7 +6,7 @@ from typing import Set, List
 
 
 def update_shapes_from_variants(shapes_df: pd.DataFrame, shape_variant_data: pd.DataFrame, 
-                               shapes_txt: pd.DataFrame) -> pd.DataFrame:
+                               shapes_txt: pd.DataFrame, show_progress: bool = True) -> pd.DataFrame:
     """
     Update shapes_df with any missing shape_ids from shape_variant_data.
     
@@ -14,6 +14,7 @@ def update_shapes_from_variants(shapes_df: pd.DataFrame, shape_variant_data: pd.
         shapes_df: Existing shapes DataFrame
         shape_variant_data: DataFrame containing shape variant data with shape_id column
         shapes_txt: Source shapes data from GTFS
+        show_progress: Whether to show progress messages
         
     Returns:
         Updated shapes DataFrame with new shapes added
@@ -31,24 +32,27 @@ def update_shapes_from_variants(shapes_df: pd.DataFrame, shape_variant_data: pd.
     missing_shape_ids = variant_shape_ids - existing_shape_ids
     
     if not missing_shape_ids:
-        print("All shape_ids from shape variants already exist in shapes_df.")
+        if show_progress:
+            print("All shape_ids from shape variants already exist in shapes_df.")
         return shapes_df
     
-    print(f"Found {len(missing_shape_ids)} missing shape_ids in shapes_df.")
-    print(f"Missing shape_ids: {sorted(list(missing_shape_ids))}")
+    if show_progress:
+        print(f"Found {len(missing_shape_ids)} missing shape_ids in shapes_df.")
+        print(f"Missing shape_ids: {sorted(list(missing_shape_ids))}")
     
     # Get missing shapes from shapes_txt
     missing_shapes = shapes_txt[shapes_txt['shape_id'].isin(missing_shape_ids)].copy()
     
     if missing_shapes.empty:
-        print("Warning: Missing shape_ids not found in shapes_txt!")
+        if show_progress:
+            print("Warning: Missing shape_ids not found in shapes_txt!")
         return shapes_df
     
     # Check if any shape_ids are still missing
     found_shape_ids = set(missing_shapes['shape_id'].unique())
     still_missing = missing_shape_ids - found_shape_ids
     
-    if still_missing:
+    if still_missing and show_progress:
         print(f"Warning: {len(still_missing)} shape_ids not found in shapes_txt: {sorted(list(still_missing))}")
     
     # Add new shapes to shapes_df
@@ -58,8 +62,9 @@ def update_shapes_from_variants(shapes_df: pd.DataFrame, shape_variant_data: pd.
         # Sort by shape_id and shape_pt_sequence for consistency
         updated_shapes_df = updated_shapes_df.sort_values(['shape_id', 'shape_pt_sequence']).reset_index(drop=True)
         
-        print(f"Added {len(missing_shapes)} shape records to shapes_df.")
-        print(f"New shapes_df shape: {updated_shapes_df.shape}")
+        if show_progress:
+            print(f"Added {len(missing_shapes)} shape records to shapes_df.")
+            print(f"New shapes_df shape: {updated_shapes_df.shape}")
         
         return updated_shapes_df
     

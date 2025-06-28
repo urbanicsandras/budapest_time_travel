@@ -42,13 +42,14 @@ def build_latest_routes(trips_df: pd.DataFrame, trip_first_date: Dict[str, Optio
     return latest_routes_df
 
 
-def update_routes(routes_df: pd.DataFrame, latest_routes_df: pd.DataFrame) -> pd.DataFrame:
+def update_routes(routes_df: pd.DataFrame, latest_routes_df: pd.DataFrame, show_progress: bool = True) -> pd.DataFrame:
     """
     Update routes DataFrame with new routes.
     
     Args:
         routes_df: Existing routes DataFrame
         latest_routes_df: Latest routes DataFrame
+        show_progress: Whether to show progress messages
         
     Returns:
         Updated routes DataFrame
@@ -65,12 +66,13 @@ def update_routes(routes_df: pd.DataFrame, latest_routes_df: pd.DataFrame) -> pd
     # Check for duplicates
     duplicates = updated_routes_df[updated_routes_df.groupby("route_id")["route_id"].transform("count") > 2]
 
-    if not duplicates.empty:
-        print(f"Warning: There are {duplicates['route_id'].nunique()} duplicated route_id(s) in routes_df!")
-        print("Duplicated route_id(s):")
-        print(duplicates['route_id'].unique())
-    else:
-        print("No duplicate route_id found in routes_df.")
+    if show_progress:
+        if not duplicates.empty:
+            print(f"Warning: There are {duplicates['route_id'].nunique()} duplicated route_id(s) in routes_df!")
+            print("Duplicated route_id(s):")
+            print(duplicates['route_id'].unique())
+        else:
+            print("No duplicate route_id found in routes_df.")
 
     return updated_routes_df
 
