@@ -9,9 +9,24 @@ from typing import Tuple, Optional
 from .config import PathManager, Config
 
 
+"""
+Data loading functions for GTFS and processed transit data.
+"""
+import pandas as pd
+import numpy as np
+import warnings
+import os
+import zipfile
+import tempfile
+from typing import Tuple, Optional
+
+from .config import PathManager, Config
+
+
 def load_gtfs_data(date: str, print_shapes: bool = False) -> Tuple[pd.DataFrame, ...]:
     """
     Load GTFS data files for a specific date.
+    Supports both folder structure and zip files.
     
     Args:
         date: Date string (e.g., '20131018')
@@ -20,39 +35,92 @@ def load_gtfs_data(date: str, print_shapes: bool = False) -> Tuple[pd.DataFrame,
     Returns:
         Tuple of DataFrames: (routes, trips, shapes, calendar, calendar_dates)
     """
-    routes_path, trips_path, shapes_path, calendar_path, calendar_dates_path = PathManager.get_gtfs_data_paths(date)
+    # Check if we have a folder or zip file
+    base_path = os.path.join(Config.RAW_DATA_FOLDER, date)
+    folder_path = base_path
+    zip_path = base_path + '.zip'
     
-    routes_df = pd.read_csv(routes_path)
+    temp_dir = None
+    cleanup_needed = False
     
-    # Read trips with mixed type handling - suppress warnings for cleaner output
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", pd.errors.DtypeWarning)
-        trips_df = pd.read_csv(trips_path, dtype={
-            'service_id': 'str',
-            'trip_id': 'str', 
-            'route_id': 'str',
-            'shape_id': 'str',
-            'trip_headsign': 'str',
-            'direction_id': 'Int64',  # nullable integer
-            'block_id': 'str'
-        }, low_memory=False)
-    
-    shapes_df = pd.read_csv(shapes_path)
-    calendar_dates_df = pd.read_csv(calendar_dates_path)
-
-    if print_shapes:
-        print("Routes:", routes_df.shape)
-        print("Trips:", trips_df.shape)
-        print("Shapes:", shapes_df.shape)
-        print("Calendar Dates:", calendar_dates_df.shape)
-
     try:
-        calendar_df = pd.read_csv(calendar_path, parse_dates=['start_date', 'end_date'])
-    except FileNotFoundError:
-        print("Calendar file not found. Creating empty dataframe.")
-        calendar_df = _create_empty_calendar_dataframe()
+        if os.path.isdir(folder_path):
+            # Use existing folder
+            data_path = folder_path
+        elif os.path.isfile(zip_path):
+            # Extract zip file to temporary directory
+            temp_dir = tempfile.mkdtemp()
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            data_path = temp_dir
+            cleanup_needed = True
+        else:
+            # Neither folder nor zip exists
+            raise FileNotFoundError(f"No data found for date {date}. Checked: {folder_path} and {zip_path}")
+        
+        # Get file paths from the data directory
+        routes_path = os.path.join(data_path, Config.GTFS_ROUTES_FILE)
+        trips_path = os.path.join(data_path, Config.GTFS_TRIPS_FILE)
+        shapes_path = os.path.join(data_path, Config.GTFS_SHAPES_FILE)
+        calendar_path = os.path.join(data_path, Config.GTFS_CALENDAR_FILE)
+        calendar_dates_path = os.path.join(data_path, Config.GTFS_CALENDAR_DATES_FILE)
+        
+        # Load the data with proper dtype handling
+        routes_df = pd.read_csv(routes_path)
+        
+        # Read trips with mixed type handling - suppress warnings for cleaner output
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", pd.errors.DtypeWarning)
+            trips_df = pd.read_csv(trips_path, dtype={
+                'service_id': 'str',
+                'trip_id': 'str', 
+                'route_id': 'str',
+                'shape_id': 'str',
+                'trip_headsign': 'str',
+                'direction_id': 'Int64',  # nullable integer
+                'block_id': 'str'
+            }, low_memory=False)
+        
+        # Read shapes with mixed type handling
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", pd.errors.DtypeWarning)
+            shapes_df = pd.read_csv(shapes_path, dtype={
+                'shape_id': 'str',
+                'shape_pt_lat': 'float64',
+                'shape_pt_lon': 'float64', 
+                'shape_pt_sequence': 'Int64',
+                'shape_dist_traveled': 'float64'
+            }, low_memory=False)
+        
+        # Read calendar_dates with proper types
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", pd.errors.DtypeWarning)
+            calendar_dates_df = pd.read_csv(calendar_dates_path, dtype={
+                'service_id': 'str',
+                'date': 'str',  # Will be converted to datetime later
+                'exception_type': 'Int64'
+            }, low_memory=False)
+
+        if print_shapes:
+            print("Routes:", routes_df.shape)
+            print("Trips:", trips_df.shape)
+            print("Shapes:", shapes_df.shape)
+            print("Calendar Dates:", calendar_dates_df.shape)
+
+        try:
+            calendar_df = pd.read_csv(calendar_path, parse_dates=['start_date', 'end_date'])
+        except FileNotFoundError:
+            if print_shapes:
+                print("Calendar file not found. Creating empty dataframe.")
+            calendar_df = _create_empty_calendar_dataframe()
+        
+        return routes_df, trips_df, shapes_df, calendar_df, calendar_dates_df
     
-    return routes_df, trips_df, shapes_df, calendar_df, calendar_dates_df
+    finally:
+        # Clean up temporary directory if we created one
+        if cleanup_needed and temp_dir and os.path.exists(temp_dir):
+            import shutil
+            shutil.rmtree(temp_dir)
 
 
 def load_processed_data(data_folder: Optional[str] = None) -> Tuple[pd.DataFrame, ...]:
