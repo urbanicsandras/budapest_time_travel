@@ -23,20 +23,27 @@ from typing import Tuple, Optional
 from .config import PathManager, Config
 
 
-def load_gtfs_data(date: str, print_shapes: bool = False) -> Tuple[pd.DataFrame, ...]:
+def load_gtfs_data(date: str, raw_data_folder: Optional[str] = None, print_shapes: bool = False) -> Tuple[pd.DataFrame, ...]:
     """
     Load GTFS data files for a specific date.
     Supports both folder structure and zip files.
     
     Args:
         date: Date string (e.g., '20131018')
+        raw_data_folder: Custom raw data folder path. If None, uses default.
         print_shapes: Whether to print DataFrame shapes
         
     Returns:
         Tuple of DataFrames: (routes, trips, shapes, calendar, calendar_dates)
     """
+    # Use custom raw data folder or auto-detect
+    if raw_data_folder is None:
+        base_raw_folder = Config.get_default_raw_data_folder()
+    else:
+        base_raw_folder = raw_data_folder
+    
     # Check if we have a folder or zip file
-    base_path = os.path.join(Config.RAW_DATA_FOLDER, date)
+    base_path = os.path.join(base_raw_folder, date)
     folder_path = base_path
     zip_path = base_path + '.zip'
     
@@ -128,14 +135,14 @@ def load_processed_data(data_folder: Optional[str] = None) -> Tuple[pd.DataFrame
     Load processed data files or create empty ones if they don't exist.
     
     Args:
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         
     Returns:
         Tuple of DataFrames: (shapes, routes, route_versions, shape_variants, 
                              shape_variant_activations, temporary_changes)
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     

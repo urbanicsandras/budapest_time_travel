@@ -21,6 +21,7 @@ from .shape_processor import (
     build_shape_variant_data,
     update_shape_variants_and_activations
 )
+from .processing_tracker import ProcessingTracker
 from .shapes_updater import update_shapes_from_variants, validate_shape_integrity, print_shape_summary
 from .data_saver import (
     save_routes, save_route_versions, save_shape_variants, 
@@ -36,6 +37,7 @@ __all__ = [
     # Main processing classes
     'TransitDataProcessor',
     'FlexibleDateProcessor',
+    'ProcessingTracker',
     
     # High-level processing functions
     'process_transit_data',

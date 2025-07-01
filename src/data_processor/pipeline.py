@@ -20,14 +20,16 @@ from .data_saver import save_routes, save_route_versions, save_shape_variants, s
 class TransitDataProcessor:
     """Main class for processing transit data."""
     
-    def __init__(self, data_folder: Optional[str] = None):
+    def __init__(self, data_folder: Optional[str] = None, raw_data_folder: Optional[str] = None):
         """
         Initialize the processor.
         
         Args:
-            data_folder: Custom data folder path. If None, uses default.
+            data_folder: Custom processed data folder path. If None, uses auto-detected path.
+            raw_data_folder: Custom raw data folder path. If None, uses auto-detected path.
         """
         self.data_folder = data_folder
+        self.raw_data_folder = raw_data_folder
         
     def process_date(self, date: str, save_data: bool = True, return_data: bool = False, 
                     show_progress: bool = True) -> dict:
@@ -50,7 +52,7 @@ class TransitDataProcessor:
         # Step 1: Load data
         if show_progress:
             print("1. Loading GTFS data...")
-        routes_txt, trips_txt, shapes_txt, calendar_txt, calendar_dates_txt = load_gtfs_data(date)
+        routes_txt, trips_txt, shapes_txt, calendar_txt, calendar_dates_txt = load_gtfs_data(date, self.raw_data_folder)
         
         if show_progress:
             print("2. Loading existing processed data...")
@@ -127,14 +129,15 @@ class TransitDataProcessor:
             return {}
 
 
-def process_transit_data(date: str, data_folder: Optional[str] = None, save_data: bool = True, 
-                        return_data: bool = False, show_progress: bool = True) -> dict:
+def process_transit_data(date: str, data_folder: Optional[str] = None, raw_data_folder: Optional[str] = None,
+                        save_data: bool = True, return_data: bool = False, show_progress: bool = True) -> dict:
     """
     Convenience function to process transit data for a specific date.
     
     Args:
         date: Date string (e.g., '20131018')
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom processed data folder path. If None, uses auto-detected path.
+        raw_data_folder: Custom raw data folder path. If None, uses auto-detected path.
         save_data: Whether to save processed data to files
         return_data: Whether to return the processed DataFrames dictionary
         show_progress: Whether to show internal processing steps
@@ -143,5 +146,5 @@ def process_transit_data(date: str, data_folder: Optional[str] = None, save_data
         Dictionary containing all processed DataFrames if return_data=True, 
         empty dict otherwise
     """
-    processor = TransitDataProcessor(data_folder)
+    processor = TransitDataProcessor(data_folder, raw_data_folder)
     return processor.process_date(date, save_data, return_data, show_progress)

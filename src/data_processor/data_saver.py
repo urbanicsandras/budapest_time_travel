@@ -13,11 +13,11 @@ def save_routes(routes_df: pd.DataFrame, data_folder: Optional[str] = None, show
     
     Args:
         routes_df: Routes DataFrame to save
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     routes_path = file_paths[1]  # routes.csv is at index 1
@@ -33,11 +33,11 @@ def save_route_versions(route_versions_df: pd.DataFrame, data_folder: Optional[s
     
     Args:
         route_versions_df: Route versions DataFrame to save
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     route_versions_path = file_paths[2]  # route_versions.csv is at index 2
@@ -53,11 +53,11 @@ def save_shape_variants(shape_variants_df: pd.DataFrame, data_folder: Optional[s
     
     Args:
         shape_variants_df: Shape variants DataFrame to save
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     shape_variants_path = file_paths[3]  # shape_variants.csv is at index 3
@@ -74,11 +74,11 @@ def save_shape_variant_activations(shape_variant_activations_df: pd.DataFrame,
     
     Args:
         shape_variant_activations_df: Shape variant activations DataFrame to save
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     activations_path = file_paths[4]  # shape_variant_activations.csv is at index 4
@@ -94,11 +94,11 @@ def save_shapes(shapes_df: pd.DataFrame, data_folder: Optional[str] = None, show
     
     Args:
         shapes_df: Shapes DataFrame to save
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     shapes_path = file_paths[0]  # shapes.csv is at index 0
@@ -115,11 +115,11 @@ def save_temporary_changes(temporary_changes_df: pd.DataFrame,
     
     Args:
         temporary_changes_df: Temporary changes DataFrame to save
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     if data_folder is None:
-        data_folder = Config.PROCESSED_DATA_FOLDER
+        data_folder = Config.get_default_processed_data_folder()
         
     file_paths = PathManager.get_processed_data_paths(data_folder)
     temp_changes_path = file_paths[5]  # temporary_changes.csv is at index 5
@@ -144,7 +144,7 @@ def save_all_processed_data(shapes_df: pd.DataFrame, routes_df: pd.DataFrame,
         shape_variants_df: Shape variants DataFrame
         shape_variant_activations_df: Shape variant activations DataFrame
         temporary_changes_df: Temporary changes DataFrame
-        data_folder: Custom data folder path. If None, uses default.
+        data_folder: Custom data folder path. If None, uses auto-detected path.
         show_progress: Whether to show progress messages
     """
     save_shapes(shapes_df, data_folder, show_progress)
