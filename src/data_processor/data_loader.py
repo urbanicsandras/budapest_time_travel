@@ -1,16 +1,6 @@
 """
 Data loading functions for GTFS and processed transit data.
-"""
-import pandas as pd
-import numpy as np
-import warnings
-from typing import Tuple, Optional
-
-from .config import PathManager, Config
-
-
-"""
-Data loading functions for GTFS and processed transit data.
+Fixed to avoid mixed type warnings.
 """
 import pandas as pd
 import numpy as np
@@ -147,12 +137,67 @@ def load_processed_data(data_folder: Optional[str] = None) -> Tuple[pd.DataFrame
     file_paths = PathManager.get_processed_data_paths(data_folder)
     
     try:
-        shapes_df = pd.read_csv(file_paths[0])
-        routes_df = pd.read_csv(file_paths[1])
-        route_versions_df = pd.read_csv(file_paths[2], parse_dates=['valid_from', 'valid_to'])
-        shape_variants_df = pd.read_csv(file_paths[3])
-        shape_variant_activations_df = pd.read_csv(file_paths[4])
-        temporary_changes_df = pd.read_csv(file_paths[5])
+        # Load shapes with proper dtype handling to avoid mixed type warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", pd.errors.DtypeWarning)
+            shapes_df = pd.read_csv(file_paths[0], dtype={
+                'shape_id': 'str',
+                'shape_pt_lat': 'float64',
+                'shape_pt_lon': 'float64',
+                'shape_pt_sequence': 'Int64',
+                'shape_dist_traveled': 'float64',
+                'shape_bkk_ref': 'str'  # This column can have mixed types, force to string
+            }, low_memory=False)
+        
+        # Load routes
+        routes_df = pd.read_csv(file_paths[1], dtype={
+            'route_id': 'str',
+            'agency_id': 'str',
+            'route_short_name': 'str',
+            'route_type': 'Int64',
+            'route_color': 'str',
+            'route_text_color': 'str'
+        })
+        
+        # Load route versions with date parsing
+        route_versions_df = pd.read_csv(file_paths[2], parse_dates=['valid_from', 'valid_to'], dtype={
+            'version_id': 'Int64',
+            'route_id': 'str',
+            'direction_id': 'Int64',
+            'route_long_name': 'str',
+            'route_desc': 'str',
+            'main_shape_id': 'str',
+            'trip_headsign': 'str',
+            'parent_version_id': 'Int64',
+            'note': 'str'
+        })
+        
+        # Load shape variants
+        shape_variants_df = pd.read_csv(file_paths[3], dtype={
+            'shape_variant_id': 'Int64',
+            'version_id': 'Int64',
+            'shape_id': 'str',
+            'trip_headsign': 'str',
+            'is_main': 'Int64',
+            'note': 'str'
+        })
+        
+        # Load shape variant activations
+        shape_variant_activations_df = pd.read_csv(file_paths[4], dtype={
+            'date': 'str',
+            'shape_variant_id': 'Int64',
+            'exception_type': 'float64'
+        })
+        
+        # Load temporary changes
+        temporary_changes_df = pd.read_csv(file_paths[5], dtype={
+            'detour_id': 'str',
+            'route_id': 'str',
+            'start_date': 'str',
+            'end_date': 'str',
+            'affects_version_id': 'Int64',
+            'description': 'str'
+        })
         
     except FileNotFoundError:
         print("Some processed data files not found. Creating empty dataframes.")
@@ -181,44 +226,86 @@ def _create_empty_calendar_dataframe() -> pd.DataFrame:
 
 
 def _create_empty_processed_dataframes() -> Tuple[pd.DataFrame, ...]:
-    """Create empty processed DataFrames with proper structure."""
+    """Create empty processed DataFrames with proper structure and dtypes."""
     
-    # shapes_df
+    # shapes_df with proper dtypes
     shapes_df = pd.DataFrame(columns=[
         "shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence", 
         "shape_dist_traveled", "shape_bkk_ref"
-    ])
+    ]).astype({
+        'shape_id': 'str',
+        'shape_pt_lat': 'float64',
+        'shape_pt_lon': 'float64',
+        'shape_pt_sequence': 'Int64',
+        'shape_dist_traveled': 'float64',
+        'shape_bkk_ref': 'str'
+    })
 
-    # routes_df
+    # routes_df with proper dtypes
     routes_df = pd.DataFrame(columns=[
         "route_id", "agency_id", "route_short_name", "route_type", 
         "route_color", "route_text_color"
-    ])
+    ]).astype({
+        'route_id': 'str',
+        'agency_id': 'str',
+        'route_short_name': 'str',
+        'route_type': 'Int64',
+        'route_color': 'str',
+        'route_text_color': 'str'
+    })
 
-    # route_versions_df
+    # route_versions_df with proper dtypes
     route_versions_df = pd.DataFrame(columns=[
         "version_id", "route_id", "direction_id", "route_long_name", "route_desc",
         "valid_from", "valid_to", "main_shape_id", "trip_headsign",
         "parent_version_id", "note"
     ])
+    route_versions_df = route_versions_df.astype({
+        'version_id': 'Int64',
+        'route_id': 'str',
+        'direction_id': 'Int64',
+        'route_long_name': 'str',
+        'route_desc': 'str',
+        'main_shape_id': 'str',
+        'trip_headsign': 'str',
+        'parent_version_id': 'Int64',
+        'note': 'str'
+    })
     route_versions_df['valid_from'] = pd.to_datetime(route_versions_df['valid_from'])
     route_versions_df['valid_to'] = pd.to_datetime(route_versions_df['valid_to'])
     
-    # shape_variants_df
+    # shape_variants_df with proper dtypes
     shape_variants_df = pd.DataFrame(columns=[
         "shape_variant_id", "version_id", "shape_id", "trip_headsign", "is_main", "note"
-    ])
+    ]).astype({
+        'shape_variant_id': 'Int64',
+        'version_id': 'Int64',
+        'shape_id': 'str',
+        'trip_headsign': 'str',
+        'is_main': 'Int64',
+        'note': 'str'
+    })
 
-    # shape_variant_activations_df
+    # shape_variant_activations_df with proper dtypes
     shape_variant_activations_df = pd.DataFrame(columns=[
         "date", "shape_variant_id", "exception_type"
-    ])
-    shape_variant_activations_df = shape_variant_activations_df.astype({"exception_type": "float64"})
+    ]).astype({
+        'date': 'str',
+        'shape_variant_id': 'Int64',
+        'exception_type': 'float64'
+    })
 
-    # temporary_changes_df
+    # temporary_changes_df with proper dtypes
     temporary_changes_df = pd.DataFrame(columns=[
         "detour_id", "route_id", "start_date", "end_date", "affects_version_id", "description"
-    ])
+    ]).astype({
+        'detour_id': 'str',
+        'route_id': 'str',
+        'start_date': 'str',
+        'end_date': 'str',
+        'affects_version_id': 'Int64',
+        'description': 'str'
+    })
     
     return (shapes_df, routes_df, route_versions_df, shape_variants_df, 
             shape_variant_activations_df, temporary_changes_df)
@@ -226,5 +313,8 @@ def _create_empty_processed_dataframes() -> Tuple[pd.DataFrame, ...]:
 
 def _save_empty_dataframes(file_paths: Tuple[str, ...], *dataframes: pd.DataFrame) -> None:
     """Save empty dataframes to their respective files."""
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(file_paths[0]), exist_ok=True)
+    
     for path, df in zip(file_paths, dataframes):
         df.to_csv(path, index=False)

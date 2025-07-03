@@ -1,5 +1,6 @@
 """
 Shape variant processing functions for transit data.
+Fixed to avoid pandas concatenation warnings.
 """
 import pandas as pd
 import numpy as np
@@ -84,8 +85,18 @@ def merge_service_data(df_noexceptions: pd.DataFrame, df_exceptions: pd.DataFram
     df1['date'] = pd.to_datetime(df1['date']).dt.strftime('%Y-%m-%d')
     df2['date'] = pd.to_datetime(df2['date']).dt.strftime('%Y-%m-%d')
 
-    # Concatenate the dataframes
-    combined = pd.concat([df1, df2], ignore_index=True)
+    # Concatenate the dataframes (handle empty DataFrames properly)
+    if df1.empty and df2.empty:
+        combined = pd.DataFrame()
+    elif df1.empty:
+        combined = df2.copy()
+    elif df2.empty:
+        combined = df1.copy()
+    else:
+        combined = pd.concat([df1, df2], ignore_index=True)
+    
+    if combined.empty:
+        return combined
 
     # Columns for duplicate checking (excluding exception_type)
     cols_except_exception = [col for col in combined.columns if col != 'exception_type']
@@ -187,8 +198,11 @@ def update_shape_variants_and_activations(shape_variant_data: pd.DataFrame,
         new_variant_records['note'] = None
         new_variant_records = new_variant_records[['shape_variant_id', 'version_id', 'shape_id', 'trip_headsign', 'is_main', 'note']]
         
-        # Append to existing shape_variants_df
-        shape_variants_df = pd.concat([shape_variants_df, new_variant_records], ignore_index=True)
+        # Append to existing shape_variants_df (handle empty DataFrames properly)
+        if shape_variants_df.empty:
+            shape_variants_df = new_variant_records.copy()
+        else:
+            shape_variants_df = pd.concat([shape_variants_df, new_variant_records], ignore_index=True)
 
     # Create mapping for all variants (existing + new)
     variant_mapping = shape_variants_df[['shape_variant_id', 'version_id', 'shape_id', 'trip_headsign', 'is_main']].copy()
@@ -217,9 +231,12 @@ def update_shape_variants_and_activations(shape_variant_data: pd.DataFrame,
     else:
         truly_new_activations = new_activations
 
-    # Add new activations to shape_variant_activations_df
+    # Add new activations to shape_variant_activations_df (handle empty DataFrames properly)
     if not truly_new_activations.empty:
-        shape_variant_activations_df = pd.concat([shape_variant_activations_df, truly_new_activations], ignore_index=True)
+        if shape_variant_activations_df.empty:
+            shape_variant_activations_df = truly_new_activations.copy()
+        else:
+            shape_variant_activations_df = pd.concat([shape_variant_activations_df, truly_new_activations], ignore_index=True)
 
     shape_variant_activations_df.sort_values(['date', 'shape_variant_id'], inplace=True)
     shape_variant_activations_df.reset_index(drop=True, inplace=True)

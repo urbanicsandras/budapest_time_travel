@@ -1,5 +1,5 @@
 """
-Main processing pipeline for transit data processing.
+Updated processing pipeline with proper progress control.
 """
 import pandas as pd
 from typing import Optional
@@ -70,10 +70,10 @@ class TransitDataProcessor:
         latest_routes_df = build_latest_routes(trips_txt, trip_first_date, routes_txt)
         updated_routes_df = update_routes(routes_df, latest_routes_df, show_progress)
         
-        # Step 4: Process route versions
+        # Step 4: Process route versions (pass show_progress parameter)
         if show_progress:
             print("5. Processing route versions...")
-        updated_route_versions_df = update_route_versions(route_versions_df, latest_routes_df, date)
+        updated_route_versions_df = update_route_versions(route_versions_df, latest_routes_df, date, show_progress)
         
         # Step 6: Process shape variants
         if show_progress:

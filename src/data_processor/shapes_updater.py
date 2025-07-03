@@ -1,5 +1,6 @@
 """
 Shape data management functions for transit data processing.
+Fixed to avoid pandas concatenation warnings.
 """
 import pandas as pd
 from typing import Set, List
@@ -55,9 +56,14 @@ def update_shapes_from_variants(shapes_df: pd.DataFrame, shape_variant_data: pd.
     if still_missing and show_progress:
         print(f"Warning: {len(still_missing)} shape_ids not found in shapes_txt: {sorted(list(still_missing))}")
     
-    # Add new shapes to shapes_df
+    # Add new shapes to shapes_df (handle empty DataFrames properly)
     if not missing_shapes.empty:
-        updated_shapes_df = pd.concat([shapes_df, missing_shapes], ignore_index=True)
+        if shapes_df.empty:
+            # If shapes_df is empty, just use missing_shapes but ensure proper column structure
+            updated_shapes_df = missing_shapes.copy()
+        else:
+            # Both DataFrames have data, safe to concatenate
+            updated_shapes_df = pd.concat([shapes_df, missing_shapes], ignore_index=True)
         
         # Sort by shape_id and shape_pt_sequence for consistency
         updated_shapes_df = updated_shapes_df.sort_values(['shape_id', 'shape_pt_sequence']).reset_index(drop=True)

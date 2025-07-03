@@ -1,5 +1,5 @@
 """
-Route processing functions for transit data.
+Fixed route processing functions for transit data with proper version management.
 """
 import pandas as pd
 import numpy as np
@@ -60,11 +60,16 @@ def update_routes(routes_df: pd.DataFrame, latest_routes_df: pd.DataFrame, show_
     # Select new rows - routes not in existing routes_df 
     new_routes = latest_routes_df[~latest_routes_df["route_id"].isin(routes_df["route_id"])][cols_to_use]
     
-    # Concatenate new routes
-    updated_routes_df = pd.concat([routes_df, new_routes], ignore_index=True)
+    # Concatenate new routes (handle empty DataFrames properly)
+    if new_routes.empty:
+        updated_routes_df = routes_df.copy()
+    elif routes_df.empty:
+        updated_routes_df = new_routes.copy()
+    else:
+        updated_routes_df = pd.concat([routes_df, new_routes], ignore_index=True)
 
     # Check for duplicates
-    duplicates = updated_routes_df[updated_routes_df.groupby("route_id")["route_id"].transform("count") > 2]
+    duplicates = updated_routes_df[updated_routes_df.groupby("route_id")["route_id"].transform("count") > 1]
 
     if show_progress:
         if not duplicates.empty:
@@ -98,14 +103,15 @@ def version_exists(current_versions: pd.DataFrame, row: pd.Series) -> bool:
 
 
 def update_route_versions(route_versions_df: pd.DataFrame, latest_routes_df: pd.DataFrame, 
-                         date: str) -> pd.DataFrame:
+                         date: str, show_progress: bool = True) -> pd.DataFrame:
     """
-    Update route versions DataFrame with new versions.
+    Update route versions DataFrame with new versions, properly handling overlaps and duplicates.
     
     Args:
         route_versions_df: Existing route versions DataFrame
         latest_routes_df: Latest routes DataFrame
         date: Processing date
+        show_progress: Whether to show detailed progress messages
         
     Returns:
         Updated route versions DataFrame
@@ -131,18 +137,174 @@ def update_route_versions(route_versions_df: pd.DataFrame, latest_routes_df: pd.
     # Filter for truly new versions
     new_versions_filtered = new_versions_df[~new_versions_df.apply(lambda row: version_exists(current_versions, row), axis=1)].copy()
 
-    # Update previous versions' valid_to date
-    for _, row in new_versions_filtered.iterrows():
-        mask = (
-            (route_versions_df["route_id"] == row["route_id"]) &
-            (route_versions_df["valid_to"].isna())
+    if new_versions_filtered.empty:
+        # No new versions to add
+        return route_versions_copy_df
+
+    # FIXED LOGIC: Update previous versions' valid_to date CORRECTLY
+    for _, new_row in new_versions_filtered.iterrows():
+        # Find all current (active) versions for this route and direction
+        active_versions_mask = (
+            (route_versions_copy_df["route_id"] == new_row["route_id"]) &
+            (route_versions_copy_df["direction_id"] == new_row["direction_id"]) &
+            (route_versions_copy_df["valid_to"].isna())
         )
-        route_versions_copy_df.loc[mask, "valid_to"] = row["valid_from"] - pd.Timedelta(days=1)
+        
+        # Get the indices of active versions for this route/direction
+        active_indices = route_versions_copy_df[active_versions_mask].index
+        
+        if len(active_indices) > 0:
+            # Set valid_to to the day before the new version starts
+            new_valid_to = new_row["valid_from"] - pd.Timedelta(days=1)
+            
+            # Update all active versions for this route/direction
+            route_versions_copy_df.loc[active_indices, "valid_to"] = new_valid_to
+            
+            if show_progress:
+                print(f"Updated {len(active_indices)} existing version(s) for route {new_row['route_id']} direction {new_row['direction_id']}")
+                print(f"  Set valid_to to: {new_valid_to.strftime('%Y-%m-%d')}")
 
     # Assign version IDs to new versions
     new_versions_filtered["version_id"] = range(next_version_id, next_version_id + len(new_versions_filtered))
 
-    # Concatenate with existing versions
-    extended_route_versions_df = pd.concat([route_versions_copy_df, new_versions_filtered], ignore_index=True)
+    # Concatenate with existing versions (handle empty DataFrames properly)
+    if new_versions_filtered.empty:
+        extended_route_versions_df = route_versions_copy_df
+    elif route_versions_copy_df.empty:
+        extended_route_versions_df = new_versions_filtered
+    else:
+        extended_route_versions_df = pd.concat([route_versions_copy_df, new_versions_filtered], ignore_index=True)
+
+    # ADDITIONAL VALIDATION: Check for overlaps and fix them
+    #####extended_route_versions_df = fix_version_overlaps(extended_route_versions_df, show_progress)
 
     return extended_route_versions_df
+
+
+def fix_version_overlaps(route_versions_df: pd.DataFrame, show_progress: bool = True) -> pd.DataFrame:
+    """
+    Fix any remaining overlaps in route versions by ensuring proper date sequencing.
+    
+    Args:
+        route_versions_df: Route versions DataFrame that may have overlaps
+        show_progress: Whether to show detailed progress messages
+        
+    Returns:
+        DataFrame with overlaps fixed
+    """
+    df = route_versions_df.copy()
+    
+    # Group by route_id and direction_id to fix overlaps within each group
+    groups = df.groupby(['route_id', 'direction_id'])
+    
+    fixed_dfs = []
+    overlap_count = 0
+    
+    for (route_id, direction_id), group in groups:
+        group_copy = group.copy().sort_values('valid_from')
+        
+        # Check for overlaps in this group
+        for i in range(len(group_copy) - 1):
+            current_row = group_copy.iloc[i]
+            next_row = group_copy.iloc[i + 1]
+            
+            # If current version has no end date, set it to day before next version starts
+            if pd.isna(current_row['valid_to']):
+                new_valid_to = next_row['valid_from'] - pd.Timedelta(days=1)
+                group_copy.iloc[i, group_copy.columns.get_loc('valid_to')] = new_valid_to
+                overlap_count += 1
+            
+            # If current version ends after next version starts, fix the overlap
+            elif current_row['valid_to'] >= next_row['valid_from']:
+                new_valid_to = next_row['valid_from'] - pd.Timedelta(days=1)
+                group_copy.iloc[i, group_copy.columns.get_loc('valid_to')] = new_valid_to
+                overlap_count += 1
+        
+        fixed_dfs.append(group_copy)
+    
+    result_df = pd.concat(fixed_dfs, ignore_index=True)
+    
+    if overlap_count > 0 and show_progress:
+        print(f"Fixed {overlap_count} date overlap(s) in route versions")
+    
+    return result_df
+
+
+def validate_route_versions(route_versions_df: pd.DataFrame, show_details: bool = True) -> dict:
+    """
+    Validate route versions for common issues like overlaps and invalid date ranges.
+    
+    Args:
+        route_versions_df: Route versions DataFrame to validate
+        show_details: Whether to show detailed information about issues
+        
+    Returns:
+        Dictionary with validation results
+    """
+    issues = {
+        'invalid_date_ranges': [],
+        'overlapping_versions': [],
+        'duplicate_active_versions': [],
+        'is_valid': True
+    }
+    
+    if route_versions_df.empty:
+        return issues
+    
+    # Check for invalid date ranges (valid_to before valid_from)
+    invalid_ranges = route_versions_df[
+        (route_versions_df['valid_to'].notna()) & 
+        (route_versions_df['valid_to'] < route_versions_df['valid_from'])
+    ]
+    
+    if not invalid_ranges.empty:
+        issues['invalid_date_ranges'] = invalid_ranges[['version_id', 'route_id', 'direction_id', 'valid_from', 'valid_to']].to_dict('records')
+        issues['is_valid'] = False
+        if show_details:
+            print(f"❌ Found {len(invalid_ranges)} version(s) with invalid date ranges:")
+            for _, row in invalid_ranges.iterrows():
+                print(f"  Version {row['version_id']}: Route {row['route_id']} Dir {row['direction_id']} - {row['valid_from']} to {row['valid_to']}")
+    
+    # Check for overlapping versions within same route/direction
+    groups = route_versions_df.groupby(['route_id', 'direction_id'])
+    
+    for (route_id, direction_id), group in groups:
+        group_sorted = group.sort_values('valid_from')
+        
+        # Check for multiple active versions (no valid_to date)
+        active_versions = group_sorted[group_sorted['valid_to'].isna()]
+        if len(active_versions) > 1:
+            issues['duplicate_active_versions'].extend(
+                active_versions[['version_id', 'route_id', 'direction_id', 'valid_from']].to_dict('records')
+            )
+            issues['is_valid'] = False
+            if show_details:
+                print(f"❌ Multiple active versions for Route {route_id} Direction {direction_id}:")
+                for _, row in active_versions.iterrows():
+                    print(f"  Version {row['version_id']}: from {row['valid_from']}")
+        
+        # Check for overlapping date ranges
+        for i in range(len(group_sorted) - 1):
+            current = group_sorted.iloc[i]
+            next_version = group_sorted.iloc[i + 1]
+            
+            if pd.notna(current['valid_to']) and current['valid_to'] >= next_version['valid_from']:
+                overlap_info = {
+                    'route_id': route_id,
+                    'direction_id': direction_id,
+                    'version1_id': current['version_id'],
+                    'version1_range': f"{current['valid_from']} to {current['valid_to']}",
+                    'version2_id': next_version['version_id'],
+                    'version2_range': f"{next_version['valid_from']} to {next_version['valid_to'] if pd.notna(next_version['valid_to']) else 'ongoing'}"
+                }
+                issues['overlapping_versions'].append(overlap_info)
+                issues['is_valid'] = False
+                if show_details:
+                    print(f"❌ Overlapping versions for Route {route_id} Direction {direction_id}:")
+                    print(f"  Version {current['version_id']}: {overlap_info['version1_range']}")
+                    print(f"  Version {next_version['version_id']}: {overlap_info['version2_range']}")
+    
+    if issues['is_valid'] and show_details:
+        print("✅ All route versions are valid - no overlaps or invalid date ranges found.")
+    
+    return issues
